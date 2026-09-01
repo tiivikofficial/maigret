@@ -13,18 +13,60 @@ jobs:
       url: https://pypi.org/p/maigret
     permissions:
       id-token: write
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Validate release tag
+        id: validate
+        run: |
+          # Fetch repository metadata to validate the release
+          git clone --bare https://github.com/${{ github.repository }}.git repo.git
+          cd repo.git
+          
+          # Get the commit SHA that the release tag points to
+          TAG_COMMIT=$(git rev-list -n 1 "${{ github.ref }}")
+          echo "Tag commit: $TAG_COMMIT"
+          
+          # Verify the tag commit exists in the main branch history
+          # This ensures the release tag points to reviewed code on the protected branch
+          if git merge-base --is-ancestor "$TAG_COMMIT" refs/heads/main 2>/dev/null || \
+             git merge-base --is-ancestor "$TAG_COMMIT" refs/heads/master 2>/dev/null; then
+            echo "✓ Release tag points to a commit in the main/master branch history"
+            echo "validated=true" >> $GITHUB_OUTPUT
+            echo "commit_sha=$TAG_COMMIT" >> $GITHUB_OUTPUT
+          else
+            echo "✗ ERROR: Release tag does not point to a commit in the main/master branch"
+            echo "✗ This release cannot be published as it may contain unreviewed code"
+            echo "validated=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          cd ..
+          rm -rf repo.git
+      
+      - name: Checkout validated commit
+        if: steps.validate.outputs.validated == 'true'
+        uses: actions/checkout@v4
+        with:
+          # Pin to the validated commit SHA to prevent TOCTOU attacks
+          ref: ${{ steps.validate.outputs.commit_sha }}
+      
       - name: Set up Python
+        if: steps.validate.outputs.validated == 'true'
         uses: actions/setup-python@v4
         with:
           python-version: "3.x"
+      
       - name: Install dependencies
+        if: steps.validate.outputs.validated == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install setuptools wheel
+      
       - name: Build package
+        if: steps.validate.outputs.validated == 'true'
         run: |
           python setup.py sdist bdist_wheel  # Could also be python -m build
+      
       - name: Publish package distributions to PyPI
+        if: steps.validate.outputs.validated == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
