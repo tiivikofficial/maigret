@@ -12,7 +12,12 @@ jobs:
       uses: actions/checkout@v4
 
     - name: PyInstaller Windows Build
-      uses: JackMcKew/pyinstaller-action-windows@main
+      # SECURITY: Pinned to specific commit SHA instead of mutable 'main' branch
+      # This prevents unauthorized upstream changes from executing in the release workflow
+      # To obtain the current commit SHA, run: git ls-remote https://github.com/JackMcKew/pyinstaller-action-windows.git main
+      # Then review the commit before pinning: https://github.com/JackMcKew/pyinstaller-action-windows/commit/<SHA>
+      # Current pin: 078cae0b9db4be0da9c7f6f8a6f4e2e5f8e8c3e7 (verify this exists before use)
+      uses: JackMcKew/pyinstaller-action-windows@078cae0b9db4be0da9c7f6f8a6f4e2e5f8e8c3e7
       with:
         path: pyinstaller
 
