@@ -27,8 +27,12 @@ You may be interested in:
 -------------------------
 - :doc:`Quick start <quick-start>`
 - :doc:`Usage examples <usage-examples>`
+- :doc:`FAQ <faq>`
 - :doc:`Command line options <command-line-options>`
 - :doc:`Features list <features>`
+- :doc:`Library usage <library-usage>`
+- :doc:`Tor, I2P, and proxies <tor-and-proxies>`
+- `Run it online without installing <https://maigret.app/docs-en>`_
 
 .. toctree::
    :hidden:
@@ -37,10 +41,26 @@ You may be interested in:
    quick-start
    installation
    usage-examples
+   faq
    command-line-options
    features
    philosophy
    supported-identifier-types
    tags
-   settings
    development
+   release-process
+
+.. toctree::
+   :hidden:
+   :caption: Advanced usage
+
+   library-usage
+   settings
+   tor-and-proxies
+
+.. toctree::
+   :hidden:
+   :caption: Use cases
+
+   use-cases/crypto
+   use-cases/scientists

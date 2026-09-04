@@ -3,6 +3,8 @@
 import itertools
 import re
 
+from markupsafe import Markup
+
 from maigret.utils import (
     CaseConverter,
     is_country_tag,
@@ -10,6 +12,7 @@ from maigret.utils import (
     URLMatcher,
     get_dict_ascii_tree,
     get_match_ratio,
+    is_plausible_username,
 )
 
 
@@ -51,12 +54,49 @@ def test_is_country_tag():
     assert is_country_tag('global') is True
 
 
+def test_is_country_tag_field_names_are_not_country_codes():
+    """The field names 'country' and 'locale' must not be mistaken for ISO codes.
+
+    generate_report_context iterates ids_data and for keys 'country'/'locale'
+    decides whether to use direct alpha_2 lookup (is_country_tag(v)) or fuzzy
+    search. A previous bug passed the key name k instead of the value v, so
+    is_country_tag('country') was always False and the direct lookup path was
+    dead code.
+    """
+    assert is_country_tag('country') is False
+    assert is_country_tag('locale') is False
+    # Values that should trigger the direct lookup
+    assert is_country_tag('US') is True
+    assert is_country_tag('ru') is True
+
+
 def test_enrich_link_str():
     assert enrich_link_str('test') == 'test'
     assert (
         enrich_link_str(' www.flickr.com/photos/alexaimephotography/')
         == '<a class="auto-link" href="www.flickr.com/photos/alexaimephotography/">www.flickr.com/photos/alexaimephotography/</a>'
     )
+
+
+def test_enrich_link_str_escapes_payload():
+    # markup inside a link must be escaped while the <a> wrapper is preserved
+    payload = 'http://evil.example/"><img src=x onerror=alert(1)>'
+    result = enrich_link_str(payload)
+
+    assert isinstance(result, Markup)
+    assert '<img' not in result
+    assert '&lt;img' in result
+    assert '"><img' not in result
+    assert result.startswith('<a class="auto-link" href="')
+
+
+def test_enrich_link_str_non_link_is_plain_str():
+    # non-link values stay plain str so template autoescaping neutralizes them
+    payload = '<script>alert(1)</script>'
+    result = enrich_link_str(payload)
+
+    assert not isinstance(result, Markup)
+    assert result == payload
 
 
 def test_url_extract_main_part_negative():
@@ -83,6 +123,17 @@ def test_url_extract_main_part():
         assert not url_regexp.match(url) is None
 
 
+def test_url_extract_main_part_keeps_host_starting_with_prefix_letters():
+    # The optional (www.|m.)? group must only strip the literal 'www.'/'m.'
+    # subdomain prefixes. With unescaped dots it instead ate the first
+    # character(s) of any host starting with 'm'/'www' (e.g. medium.com).
+    assert URLMatcher.extract_main_part('https://medium.com/alice') == 'medium.com/alice'
+    assert URLMatcher.extract_main_part('https://myspace.com/bob') == 'myspace.com/bob'
+    # genuine mobile/web subdomain prefixes are still stripped
+    assert URLMatcher.extract_main_part('https://m.wikipedia.org/wiki/Foo') == 'wikipedia.org/wiki/Foo'
+    assert URLMatcher.extract_main_part('https://www.flickr.com/photos/x') == 'flickr.com/photos/x'
+
+
 def test_url_make_profile_url_regexp():
     url_main_part = 'flickr.com/photos/{username}'
 
@@ -99,7 +150,7 @@ def test_url_make_profile_url_regexp():
         # ensure all combinations match pattern
         assert (
             URLMatcher.make_profile_url_regexp(url).pattern
-            == r'^https?://(www.|m.)?flickr\.com/photos/(.+?)$'
+            == r'^https?://(www\.|m\.)?flickr\.com/photos/(.+?)$'
         )
 
 
@@ -140,7 +191,73 @@ def test_get_dict_ascii_tree():
     )
 
 
+def test_get_dict_ascii_tree_handles_non_string_values():
+    assert get_dict_ascii_tree([('uid', 42)], new_line=False) == '└─uid: 42'
+
+
 def test_get_match_ratio():
     fun = get_match_ratio(["test", "maigret", "username"])
 
     assert fun("test") == 1
+
+
+# Regression tests for #1403 — Gravatar URL leaking into next-iteration username.
+# Extractor schemes occasionally store URLs/emails under '*_username' keys; without
+# validation these were fed back into the search loop and produced cascades of false
+# errors. See maigret/utils.py::is_plausible_username.
+def test_is_plausible_username_accepts_bare_usernames():
+    assert is_plausible_username("alice")
+    assert is_plausible_username("alice.bob")
+    assert is_plausible_username("alice_bob-42")
+    assert is_plausible_username("Алиса")
+
+
+def test_is_plausible_username_rejects_urls():
+    assert not is_plausible_username("https://gravatar.com/alice")
+    assert not is_plausible_username("http://example.com/user/alice")
+    assert not is_plausible_username("//example.com/alice")
+    assert not is_plausible_username("www.facebook.com/zuck")
+
+
+def test_is_plausible_username_accepts_http_prefixed_handles():
+    """Don't over-match: bare names that just happen to start with 'http' or 'www'
+    are legitimate (e.g. the httpie CLI maintainer's handle)."""
+    assert is_plausible_username("httpie")
+    assert is_plausible_username("http_user")
+    assert is_plausible_username("wwwsuperstar")
+
+
+def test_is_plausible_username_rejects_path_like():
+    assert not is_plausible_username("user/alice")
+    assert not is_plausible_username("alice/")
+
+
+def test_is_plausible_username_rejects_emails():
+    assert not is_plausible_username("alice@example.com")
+    assert not is_plausible_username("user@maigret.io")
+
+
+def test_is_plausible_username_rejects_whitespace_and_empty():
+    assert not is_plausible_username("")
+    assert not is_plausible_username("   ")
+    assert not is_plausible_username("alice bob")
+    assert not is_plausible_username("alice\nbob")
+
+
+def test_is_plausible_username_rejects_non_strings():
+    assert not is_plausible_username(None)
+    assert not is_plausible_username(42)
+    assert not is_plausible_username(["alice"])
+
+
+def test_get_dict_ascii_tree_new_line_false_strips_leading_newline():
+    # new_line=False must drop the leading newline. It used to be a no-op
+    # because the parameter was shadowed by the horizontal box-drawing glyph.
+    items = [('a', '1'), ('b', '2')]
+    with_nl = get_dict_ascii_tree(items)
+    without_nl = get_dict_ascii_tree(items, new_line=False)
+
+    assert with_nl.startswith('\n')
+    assert not without_nl.startswith('\n')
+    # Only the leading newline differs; the tree content is identical.
+    assert with_nl[1:] == without_nl

@@ -5,7 +5,7 @@ Usage examples
 
 You can use Maigret as:
 
-- a command line tool: inital and a default mode
+- a command line tool: initial and a default mode
 - a `web interface <#web-interface>`_: view the graph with results and download all report formats on a single page
 - a library: integrate Maigret into your own project
 
@@ -13,7 +13,7 @@ Use Cases
 ---------
 
 
-1. Search for accounts with username ``machine42`` on top 500 sites (by default, according to Alexa rank) from the Maigret DB.
+1. Search for accounts with username ``machine42`` on top 500 sites (by default, according to Majestic Million rank) from the Maigret DB.
 
 .. code-block:: console
 
@@ -33,7 +33,7 @@ Use Cases
    If you experience many false positives, you can do the following:
 
    - Install the last development version of Maigret from GitHub
-   - Run Maigret with ``--self-check`` flag and agree on disabling of problematic sites
+   - Run Maigret with ``--self-check --auto-disable`` flag and agree on disabling of problematic sites
 
 3. Search for accounts with username ``machine42`` and generate HTML and PDF reports.
 
