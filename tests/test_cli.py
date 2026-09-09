@@ -5,17 +5,23 @@ from typing import Dict, Any
 
 DEFAULT_ARGS: Dict[str, Any] = {
     'all_sites': False,
+    'auto_disable': False,
     'connections': 100,
     'cookie_file': None,
     'csv': False,
     'db_file': 'resources/data.json',
     'debug': False,
+    'dns_resolver': 'async',
+    'diagnose': False,
     'disable_extracting': False,
     'disable_recursive_search': False,
+    'enrich': False,
     'folderoutput': 'reports',
     'html': False,
     'graph': False,
+    'neo4j': False,
     'id_type': 'username',
+    'input_file': None,
     'ignore_ids_list': [],
     'info': False,
     'json': '',
@@ -34,6 +40,7 @@ DEFAULT_ARGS: Dict[str, Any] = {
     'site_list': [],
     'stats': False,
     'tags': '',
+    'exclude_tags': '',
     'timeout': 30,
     'tor_proxy': 'socks5://127.0.0.1:9050',
     'i2p_proxy': 'http://127.0.0.1:4444',
@@ -45,6 +52,14 @@ DEFAULT_ARGS: Dict[str, Any] = {
     'web': None,
     'with_domains': False,
     'xmind': False,
+    'md': False,
+    'ai': False,
+    'ai_model': 'gpt-5.4',
+    'no_autoupdate': False,
+    'force_update': False,
+    'cloudflare_bypass': False,
+    'keywords': [],
+    'dns_resolver': 'async',
 }
 
 
@@ -67,6 +82,19 @@ def test_args_search_mode_several_usernames(argparser):
 
     want_args = dict(DEFAULT_ARGS)
     want_args.update({'username': ['username1', 'username2']})
+
+    for arg in vars(args):
+        assert getattr(args, arg) == want_args[arg]
+
+
+def test_args_input_file(argparser):
+    args = argparser.parse_args('--input-file ids.txt'.split())
+
+    assert args.username == []
+    assert args.input_file == 'ids.txt'
+
+    want_args = dict(DEFAULT_ARGS)
+    want_args.update({'input_file': 'ids.txt'})
 
     for arg in vars(args):
         assert getattr(args, arg) == want_args[arg]
@@ -98,6 +126,37 @@ def test_args_multiple_sites(argparser):
         {
             'site_list': ['GitHub', 'PornHub', 'Taringa,Steam'],
             'username': ['VK'],
+        }
+    )
+
+    for arg in vars(args):
+        assert getattr(args, arg) == want_args[arg]
+
+
+def test_args_exclude_tags(argparser):
+    args = argparser.parse_args('--exclude-tags porn,dating username'.split())
+
+    want_args = dict(DEFAULT_ARGS)
+    want_args.update(
+        {
+            'exclude_tags': 'porn,dating',
+            'username': ['username'],
+        }
+    )
+
+    for arg in vars(args):
+        assert getattr(args, arg) == want_args[arg]
+
+
+def test_args_tags_with_exclude_tags(argparser):
+    args = argparser.parse_args('--tags coding --exclude-tags porn username'.split())
+
+    want_args = dict(DEFAULT_ARGS)
+    want_args.update(
+        {
+            'tags': 'coding',
+            'exclude_tags': 'porn',
+            'username': ['username'],
         }
     )
 
